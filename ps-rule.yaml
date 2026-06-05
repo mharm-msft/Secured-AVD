@@ -10,8 +10,9 @@
 # =============================================================================
 
 # Treat Bicep + ARM as the input formats we care about.
+# Note: input.format is a hint to PSRule, but PSRule.Rules.Azure handles
+# bicep/ARM expansion via the InputType: repository setting on the action.
 input:
-  format: File
   pathIgnore:
     - '.github/'
     - 'docs/'
@@ -19,6 +20,10 @@ input:
     - 'shared/'
     - '**/*.md'
     - '**/.terraform/**'
+    - '**/*.tf'
+    - '**/*.ps1'
+    - '**/*.cmd'
+    - '**/*.gitattributes'
 
 # Use the GA baseline rather than preview — stability for a reference architecture.
 binding:

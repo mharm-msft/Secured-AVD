@@ -31,16 +31,60 @@ jobs:
       # PSRule for Azure runs PowerShell-based rules against Bicep + ARM source.
       # No Rego authoring required — first-party Microsoft rule set covers
       # AVMsec, Azure Well-Architected, and Cloud Adoption Framework guidance.
+      #
+      # NOTE on inputPath: the action passes inputPath verbatim to PSRule's
+      # -InputPath param. Multiple paths separated by a space get concatenated
+      # into one path and silently fail. We omit inputPath entirely so PSRule
+      # walks the whole repo, then ps-rule.yaml's input.pathIgnore filters
+      # out terraform/, docs/, shared/, .github/.
+      #
+      # NOTE on baseline: Azure.Default is the rolling baseline maintained by
+      # PSRule.Rules.Azure (currently v1.47.0). Quarterly snapshots like
+      # Azure.GA_<year>_<month> become obsolete as new ones ship — Azure.Default
+      # always tracks the supported rule set without baseline-drift breakage.
       - name: Run PSRule for Azure
+        id: psrule
         uses: microsoft/ps-rule@v2.9.0
         with:
           modules: 'PSRule.Rules.Azure'
-          baseline: 'Azure.GA_2024_03'
-          inputPath: 'bicep/ arm/'
+          baseline: 'Azure.Default'
           outputFormat: Sarif
           outputPath: ps-rule-results.sarif
           summary: true
         continue-on-error: true   # don't block the merge on advisory findings yet
+
+      # Sanity check: detect the "PSRule scanned 0 rules" silent-failure mode
+      # we hit on the first run. If the SARIF shows the tool ran but zero rules
+      # were processed, that's a configuration bug — fail the job.
+      - name: Verify PSRule actually ran
+        if: always()
+        shell: pwsh
+        run: |
+          if (-not (Test-Path ps-rule-results.sarif)) {
+            Write-Error "PSRule did not produce a SARIF file. Action likely failed before execution."
+            exit 1
+          }
+          $sarif = Get-Content ps-rule-results.sarif -Raw | ConvertFrom-Json
+          $results = $sarif.runs[0].results
+          $rules = $sarif.runs[0].tool.driver.rules
+          $resultCount = if ($null -eq $results) { 0 } else { $results.Count }
+          $ruleCount = if ($null -eq $rules) { 0 } else { $rules.Count }
+          $summary = "PSRule: $ruleCount rules registered, $resultCount findings."
+          Write-Host $summary
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "## PSRule for Azure"
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value $summary
+          if ($ruleCount -eq 0) {
+            Write-Error "PSRule registered 0 rules — silent-failure detected. Likely cause: bad inputPath, missing module, or obsolete baseline. Check the 'Run PSRule for Azure' step above."
+            exit 1
+          }
+          if ($resultCount -gt 0) {
+            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ""
+            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "| Rule | Count |"
+            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "|---|---|"
+            $results | Group-Object ruleId | Sort-Object Count -Descending | ForEach-Object {
+              Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "| $($_.Name) | $($_.Count) |"
+            }
+          }
 
       - name: Upload SARIF to Code Scanning
         if: always()
