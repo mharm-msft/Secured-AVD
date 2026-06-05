@@ -1,0 +1,120 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "namingPrefix": {
+      "value": "savd"
+    },
+    "environment": {
+      "value": "prod"
+    },
+    "location": {
+      "value": "eastus2"
+    },
+    "avdMetadataLocation": {
+      "value": "eastus"
+    },
+    "tags": {
+      "value": {
+        "workload": "avd",
+        "environment": "prod",
+        "managedBy": "Secured-AVD-IaC",
+        "costCenter": "IT-Eng-001"
+      }
+    },
+    "vnetAddressSpace": {
+      "value": "10.50.0.0/22"
+    },
+    "hostsSubnetCidr": {
+      "value": "10.50.0.0/24"
+    },
+    "peSubnetCidr": {
+      "value": "10.50.1.0/27"
+    },
+    "mgmtSubnetCidr": {
+      "value": "10.50.1.32/27"
+    },
+    "hubVnetId": {
+      "value": ""
+    },
+    "dnsServers": {
+      "value": []
+    },
+    "hostPoolType": {
+      "value": "Pooled"
+    },
+    "loadBalancerType": {
+      "value": "BreadthFirst"
+    },
+    "maxSessionLimit": {
+      "value": 8
+    },
+    "preferredAppGroupType": {
+      "value": "Desktop"
+    },
+    "validationEnvironment": {
+      "value": false
+    },
+    "startVMOnConnect": {
+      "value": true
+    },
+    "vmSize": {
+      "value": "Standard_D4s_v5"
+    },
+    "vmCount": {
+      "value": 2
+    },
+    "availabilityZones": {
+      "value": [
+        1,
+        2,
+        3
+      ]
+    },
+    "osDiskType": {
+      "value": "Premium_LRS"
+    },
+    "osDiskSizeGb": {
+      "value": 128
+    },
+    "imageReference": {
+      "value": {
+        "kind": "marketplace",
+        "alias": "win11-24h2-avd-m365"
+      }
+    },
+    "adminUsername": {
+      "value": "savdadmin"
+    },
+    "adminPassword": {
+      "value": "ChangeMeBeforeDeploy!1"
+    },
+    "enableIntuneEnrollment": {
+      "value": true
+    },
+    "desktopUserGroupObjectId": {
+      "value": "00000000-0000-0000-0000-000000000000"
+    },
+    "adminUserGroupObjectId": {
+      "value": ""
+    },
+    "rdpShortpathMode": {
+      "value": "Both"
+    },
+    "enableFSLogix": {
+      "value": false
+    },
+    "fslogixStorageSkuName": {
+      "value": "Premium_LRS"
+    },
+    "fslogixShareQuotaGb": {
+      "value": 1024
+    },
+    "logAnalyticsWorkspaceId": {
+      "value": ""
+    },
+    "logRetentionDays": {
+      "value": 30
+    }
+  }
+}
