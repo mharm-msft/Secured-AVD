@@ -1,0 +1,62 @@
+# =============================================================================
+# Sample terraform.tfvars — copy to terraform.tfvars (gitignored) and edit.
+#
+# Required:
+#   - desktopUserGroupObjectId   Entra group OID for desktop users
+#   - adminPassword              Local admin password (or set TF_VAR_adminPassword)
+#
+# All other variables have sensible defaults; override as needed.
+# =============================================================================
+
+namingPrefix              = "savd"
+environment               = "prod"
+location                  = "eastus2"
+avdMetadataLocation       = "eastus"
+
+tags = {
+  workload    = "avd"
+  environment = "prod"
+  managedBy   = "Secured-AVD-IaC"
+  costCenter  = "IT-Eng-001"
+}
+
+vnetAddressSpace = "10.50.0.0/22"
+hostsSubnetCidr  = "10.50.0.0/24"
+peSubnetCidr     = "10.50.1.0/27"
+mgmtSubnetCidr   = "10.50.1.32/27"
+hubVnetId        = ""
+dnsServers       = []
+
+hostPoolType          = "Pooled"
+loadBalancerType      = "BreadthFirst"
+maxSessionLimit       = 8
+preferredAppGroupType = "Desktop"
+validationEnvironment = false
+startVMOnConnect      = true
+
+vmSize             = "Standard_D4s_v5"
+vmCount            = 2
+availabilityZones  = [1, 2, 3]
+osDiskType         = "Premium_LRS"
+osDiskSizeGb       = 128
+
+imageReference = {
+  kind  = "marketplace"
+  alias = "win11-24h2-avd-m365"
+}
+
+adminUsername          = "savdadmin"
+# adminPassword set via TF_VAR_adminPassword env var (do NOT commit)
+enableIntuneEnrollment = true
+
+desktopUserGroupObjectId = "00000000-0000-0000-0000-000000000000"
+adminUserGroupObjectId   = ""
+
+rdpShortpathMode = "Both"
+
+enableFSLogix         = false
+fslogixStorageSkuName = "Premium_LRS"
+fslogixShareQuotaGb   = 1024
+
+logAnalyticsWorkspaceId = ""
+logRetentionDays        = 30
