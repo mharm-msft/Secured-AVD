@@ -1,0 +1,114 @@
+name: parameter-parity
+
+on:
+  push:
+    paths:
+      - 'shared/parameters.reference.json'
+      - 'bicep/**/main.bicep'
+      - 'terraform/**/variables.tf'
+      - 'arm/**/main.json'
+      - '.github/workflows/parameter-parity.yml'
+  pull_request:
+    paths:
+      - 'shared/parameters.reference.json'
+      - 'bicep/**/main.bicep'
+      - 'terraform/**/variables.tf'
+      - 'arm/**/main.json'
+      - '.github/workflows/parameter-parity.yml'
+  workflow_dispatch:
+
+jobs:
+  parity:
+    name: Verify parameter parity across ARM / Bicep / TF
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Run parity check
+        run: |
+          python3 <<'PY'
+          import json, os, re, sys, pathlib
+
+          repo = pathlib.Path('.')
+          ref_path = repo / 'shared' / 'parameters.reference.json'
+          if not ref_path.exists():
+              print("No parameter reference — skipping parity check.")
+              sys.exit(0)
+
+          ref = json.loads(ref_path.read_text())
+          # Collect canonical param names from the reference, grouped by stack-applicability
+          canonical = set()
+          cutover_only = set()
+          for section_name, section in ref.items():
+              if not isinstance(section, dict) or section_name.startswith('$') or section_name in ('title','description','version'):
+                  continue
+              for pname in section.keys():
+                  if section_name == 'cutoverOnly':
+                      cutover_only.add(pname)
+                  else:
+                      canonical.add(pname)
+
+          def read_bicep_params(p):
+              if not p.exists(): return None
+              txt = p.read_text()
+              return set(re.findall(r"^param\s+([A-Za-z_][A-Za-z0-9_]*)\b", txt, re.M))
+
+          def read_tf_vars(p):
+              if not p.exists(): return None
+              txt = p.read_text()
+              return set(re.findall(r'^variable\s+"([A-Za-z_][A-Za-z0-9_]*)"', txt, re.M))
+
+          def read_arm_params(p):
+              if not p.exists(): return None
+              try:
+                  doc = json.loads(p.read_text())
+                  return set((doc.get('parameters') or {}).keys())
+              except Exception:
+                  return set()
+
+          stacks = {
+              'bicep/greenfield/main.bicep':       ('bicep', canonical),
+              'bicep/cutover/main.bicep':          ('bicep', canonical | cutover_only),
+              'arm/greenfield/main.json':          ('arm',   canonical),
+              'arm/cutover/main.json':             ('arm',   canonical | cutover_only),
+              'terraform/greenfield/variables.tf': ('tf',    canonical),
+              'terraform/cutover/variables.tf':    ('tf',    canonical | cutover_only),
+          }
+
+          errors = []
+          for relpath, (kind, expected) in stacks.items():
+              p = repo / relpath
+              if not p.exists():
+                  print(f"  - skip (not yet authored): {relpath}")
+                  continue
+              if kind == 'bicep':
+                  found = read_bicep_params(p)
+              elif kind == 'arm':
+                  found = read_arm_params(p)
+              else:
+                  found = read_tf_vars(p)
+
+              missing = expected - found
+              extra   = found - expected
+              status = "OK" if not (missing or extra) else "MISMATCH"
+              print(f"  - {status:8s}  {relpath}")
+              if missing:
+                  print(f"      missing: {sorted(missing)}")
+                  errors.append((relpath, 'missing', sorted(missing)))
+              if extra:
+                  print(f"      extra:   {sorted(extra)}")
+                  errors.append((relpath, 'extra', sorted(extra)))
+
+          if errors:
+              print()
+              print("::error::Parameter parity violations found. Reconcile against shared/parameters.reference.json.")
+              sys.exit(1)
+          print("\nAll authored stacks match the parameter reference.")
+          PY

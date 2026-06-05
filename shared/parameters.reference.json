@@ -1,0 +1,285 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/mharm-msft/Secured-AVD/shared/parameters.reference.json",
+  "title": "Secured-AVD parameter contract",
+  "description": "Canonical parameter contract enforced across ARM, Bicep, and Terraform. Every parameter listed here MUST exist in all three IaC stacks with the same name (camelCase), type, and semantic meaning. CI validates this on every PR.",
+  "version": "1.0.0",
+
+  "naming": {
+    "namingPrefix": {
+      "type": "string",
+      "default": "savd",
+      "required": true,
+      "description": "Resource name prefix. Combined with workload + region short code to produce unique resource names. Max 6 chars recommended."
+    },
+    "environment": {
+      "type": "string",
+      "default": "prod",
+      "required": true,
+      "allowed": ["dev", "test", "stg", "prod"],
+      "description": "Environment tier; included in tags and resource names."
+    }
+  },
+
+  "location": {
+    "location": {
+      "type": "string",
+      "default": "eastus2",
+      "required": true,
+      "description": "Primary Azure region for all resources. AVD metadata location is separate (see avdMetadataLocation)."
+    },
+    "avdMetadataLocation": {
+      "type": "string",
+      "default": "eastus",
+      "required": true,
+      "allowed": ["eastus", "westus3", "westeurope", "northeurope", "uksouth", "australiaeast", "japaneast"],
+      "description": "AVD control-plane metadata location. Limited to regions where Microsoft.DesktopVirtualization stores control-plane data."
+    }
+  },
+
+  "tags": {
+    "tags": {
+      "type": "object",
+      "default": {
+        "workload": "avd",
+        "environment": "prod",
+        "managedBy": "Secured-AVD-IaC"
+      },
+      "required": false,
+      "description": "Tags applied to every resource. Merged with stack-generated tags."
+    }
+  },
+
+  "network": {
+    "vnetAddressSpace": {
+      "type": "string",
+      "default": "10.50.0.0/22",
+      "required": true,
+      "description": "CIDR for the AVD spoke VNet."
+    },
+    "hostsSubnetCidr": {
+      "type": "string",
+      "default": "10.50.0.0/24",
+      "required": true,
+      "description": "CIDR for session-host subnet. Must be inside vnetAddressSpace."
+    },
+    "peSubnetCidr": {
+      "type": "string",
+      "default": "10.50.1.0/27",
+      "required": true,
+      "description": "CIDR for private-endpoint subnet."
+    },
+    "mgmtSubnetCidr": {
+      "type": "string",
+      "default": "10.50.1.32/27",
+      "required": false,
+      "description": "CIDR for management/jumpbox subnet (optional). Set to null to skip."
+    },
+    "hubVnetId": {
+      "type": "string",
+      "default": null,
+      "required": false,
+      "description": "Resource ID of an existing hub VNet to peer with. Null = standalone spoke."
+    },
+    "dnsServers": {
+      "type": "array",
+      "default": [],
+      "required": false,
+      "description": "Custom DNS server IPs for the VNet. Empty = Azure-provided DNS (required when using Private DNS Zones directly without DNS Forwarder)."
+    }
+  },
+
+  "hostPool": {
+    "hostPoolType": {
+      "type": "string",
+      "default": "Pooled",
+      "required": true,
+      "allowed": ["Pooled", "Personal"],
+      "description": "Pooled = multi-session shared hosts. Personal = 1:1 user-to-host."
+    },
+    "loadBalancerType": {
+      "type": "string",
+      "default": "BreadthFirst",
+      "required": true,
+      "allowed": ["BreadthFirst", "DepthFirst", "Persistent"],
+      "description": "Connection load-balancing algorithm. Persistent applies to Personal host pools only."
+    },
+    "maxSessionLimit": {
+      "type": "integer",
+      "default": 8,
+      "required": true,
+      "min": 1,
+      "max": 999999,
+      "description": "Max concurrent user sessions per Pooled host. Ignored for Personal."
+    },
+    "preferredAppGroupType": {
+      "type": "string",
+      "default": "Desktop",
+      "required": true,
+      "allowed": ["Desktop", "RailApplications"],
+      "description": "Desktop = full session desktop. RailApplications = RemoteApp programs."
+    },
+    "validationEnvironment": {
+      "type": "boolean",
+      "default": false,
+      "required": false,
+      "description": "If true, host pool receives AVD service updates first (canary)."
+    },
+    "startVMOnConnect": {
+      "type": "boolean",
+      "default": true,
+      "required": true,
+      "description": "Auto-start a stopped host when a user connects. Reduces cost when paired with scaling plan."
+    }
+  },
+
+  "sessionHosts": {
+    "vmSize": {
+      "type": "string",
+      "default": "Standard_D4s_v5",
+      "required": true,
+      "description": "Session-host VM SKU. Must support nested virt + trusted launch if those features are enabled."
+    },
+    "vmCount": {
+      "type": "integer",
+      "default": 2,
+      "required": true,
+      "min": 1,
+      "max": 200,
+      "description": "Number of session hosts to provision."
+    },
+    "availabilityZones": {
+      "type": "array",
+      "default": [1, 2, 3],
+      "required": false,
+      "description": "Availability zones to spread VMs across. Empty = no zone."
+    },
+    "osDiskType": {
+      "type": "string",
+      "default": "Premium_LRS",
+      "required": true,
+      "allowed": ["Standard_LRS", "StandardSSD_LRS", "Premium_LRS", "PremiumV2_LRS"],
+      "description": "OS disk storage SKU."
+    },
+    "osDiskSizeGb": {
+      "type": "integer",
+      "default": 128,
+      "required": true,
+      "min": 64,
+      "description": "OS disk size in GiB."
+    },
+    "imageReference": {
+      "type": "object",
+      "default": {
+        "kind": "marketplace",
+        "alias": "win11-24h2-avd-m365"
+      },
+      "required": true,
+      "description": "Image to deploy. Two shapes: marketplace alias (kind=marketplace, alias=key from images.reference.json) or compute gallery (kind=customImage, resourceId=...)."
+    },
+    "adminUsername": {
+      "type": "string",
+      "default": "savdadmin",
+      "required": true,
+      "description": "Local admin username on session hosts."
+    },
+    "adminPassword": {
+      "type": "securestring",
+      "default": null,
+      "required": true,
+      "description": "Local admin password. Source from Key Vault in parameter files; never commit."
+    }
+  },
+
+  "identity": {
+    "enableIntuneEnrollment": {
+      "type": "boolean",
+      "default": true,
+      "required": true,
+      "description": "Enroll Entra-joined hosts into Intune (MDM)."
+    },
+    "desktopUserGroupObjectId": {
+      "type": "string",
+      "default": null,
+      "required": true,
+      "description": "Entra security group object ID that receives 'Desktop Virtualization User' role on the app group."
+    },
+    "adminUserGroupObjectId": {
+      "type": "string",
+      "default": null,
+      "required": false,
+      "description": "Entra security group for 'Virtual Machine Administrator Login' on session hosts. Optional."
+    }
+  },
+
+  "shortpath": {
+    "rdpShortpathMode": {
+      "type": "string",
+      "default": "Both",
+      "required": true,
+      "allowed": ["None", "Managed", "Public", "Both"],
+      "description": "Managed = UDP 3390 inbound (intranet). Public = STUN/TURN UDP 3478/3479 egress (internet). Both = enable both. None = disabled."
+    }
+  },
+
+  "fslogix": {
+    "enableFSLogix": {
+      "type": "boolean",
+      "default": false,
+      "required": true,
+      "description": "If true, deploy Azure Files with Entra Kerberos + private endpoint for FSLogix profiles."
+    },
+    "fslogixStorageSkuName": {
+      "type": "string",
+      "default": "Premium_LRS",
+      "required": false,
+      "allowed": ["Standard_LRS", "Standard_GRS", "Premium_LRS", "Premium_ZRS"],
+      "description": "Storage account SKU for FSLogix file share."
+    },
+    "fslogixShareQuotaGb": {
+      "type": "integer",
+      "default": 1024,
+      "required": false,
+      "min": 100,
+      "description": "Premium file share quota in GiB."
+    }
+  },
+
+  "monitoring": {
+    "logAnalyticsWorkspaceId": {
+      "type": "string",
+      "default": null,
+      "required": false,
+      "description": "BYO Log Analytics workspace resource ID. Null = create a new workspace in the deployment RG."
+    },
+    "logRetentionDays": {
+      "type": "integer",
+      "default": 30,
+      "required": false,
+      "min": 30,
+      "max": 730,
+      "description": "Log retention for the new workspace (ignored if BYO)."
+    }
+  },
+
+  "cutoverOnly": {
+    "existingHostPoolResourceId": {
+      "type": "string",
+      "default": null,
+      "required": true,
+      "description": "[cutover only] Resource ID of the EXISTING host pool being replaced. Used to set drainMode + validate location alignment."
+    },
+    "existingWorkspaceResourceId": {
+      "type": "string",
+      "default": null,
+      "required": true,
+      "description": "[cutover only] Resource ID of the EXISTING workspace being retired."
+    },
+    "drainOldHostPool": {
+      "type": "boolean",
+      "default": true,
+      "required": false,
+      "description": "[cutover only] If true, set existing host pool to drainMode = true during deployment."
+    }
+  }
+}

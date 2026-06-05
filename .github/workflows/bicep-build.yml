@@ -1,0 +1,62 @@
+name: bicep-build
+
+on:
+  push:
+    paths:
+      - 'bicep/**'
+      - 'arm/**'
+      - '.github/workflows/bicep-build.yml'
+  pull_request:
+    paths:
+      - 'bicep/**'
+      - 'arm/**'
+      - '.github/workflows/bicep-build.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build Bicep + verify ARM in sync
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Bicep CLI
+        run: |
+          curl -Lo bicep https://github.com/Azure/bicep/releases/latest/download/bicep-linux-x64
+          chmod +x bicep
+          sudo mv bicep /usr/local/bin/bicep
+          bicep --version
+
+      - name: Lint Bicep
+        run: |
+          set -e
+          for f in bicep/greenfield/main.bicep bicep/cutover/main.bicep; do
+            if [ -f "$f" ]; then
+              echo "::group::Lint $f"
+              bicep lint "$f"
+              echo "::endgroup::"
+            fi
+          done
+
+      - name: Build Bicep → ARM and diff against committed ARM
+        run: |
+          set -e
+          mkdir -p _build/greenfield _build/cutover
+
+          if [ -f bicep/greenfield/main.bicep ]; then
+            bicep build bicep/greenfield/main.bicep --outdir _build/greenfield
+            if [ -f arm/greenfield/main.json ]; then
+              diff -u arm/greenfield/main.json _build/greenfield/main.json \
+                || { echo "::error::arm/greenfield/main.json is out of sync with bicep/greenfield/main.bicep. Run 'bicep build' and commit."; exit 1; }
+            fi
+          fi
+
+          if [ -f bicep/cutover/main.bicep ]; then
+            bicep build bicep/cutover/main.bicep --outdir _build/cutover
+            if [ -f arm/cutover/main.json ]; then
+              diff -u arm/cutover/main.json _build/cutover/main.json \
+                || { echo "::error::arm/cutover/main.json is out of sync with bicep/cutover/main.bicep. Run 'bicep build' and commit."; exit 1; }
+            fi
+          fi

@@ -1,0 +1,57 @@
+name: terraform-validate
+
+on:
+  push:
+    paths:
+      - 'terraform/**'
+      - '.github/workflows/terraform-validate.yml'
+  pull_request:
+    paths:
+      - 'terraform/**'
+      - '.github/workflows/terraform-validate.yml'
+  workflow_dispatch:
+
+jobs:
+  validate:
+    name: fmt + validate
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        stack:
+          - terraform/greenfield
+          - terraform/cutover
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.0"
+          terraform_wrapper: false
+
+      - name: terraform fmt -check -recursive
+        working-directory: ${{ matrix.stack }}
+        run: |
+          if [ ! -f main.tf ] && [ ! -f providers.tf ]; then
+            echo "No Terraform yet under ${{ matrix.stack }} — skipping."
+            exit 0
+          fi
+          terraform fmt -check -recursive -diff
+
+      - name: terraform init -backend=false
+        working-directory: ${{ matrix.stack }}
+        run: |
+          if [ ! -f main.tf ] && [ ! -f providers.tf ]; then
+            exit 0
+          fi
+          terraform init -backend=false -input=false
+
+      - name: terraform validate
+        working-directory: ${{ matrix.stack }}
+        run: |
+          if [ ! -f main.tf ] && [ ! -f providers.tf ]; then
+            exit 0
+          fi
+          terraform validate

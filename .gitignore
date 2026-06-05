@@ -1,0 +1,52 @@
+# ---- Terraform ----
+**/.terraform/
+**/.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+tfplan
+tfplan.binary
+tfplan.json
+
+# ---- Bicep ----
+# Bicep CLI doesn't typically produce build artifacts in-tree.
+# ARM under arm/ is intentionally committed (generated from Bicep, used as standalone).
+
+# ---- Azure CLI ----
+.azure/
+
+# ---- VS / VS Code / Rider ----
+.vs/
+.vscode/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+.idea/
+
+# ---- OS ----
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---- Secrets / local overrides ----
+*.local.json
+*.local.bicepparam
+*.secrets
+*.env
+.env*
+!.env.example
+
+# ---- Logs / temp ----
+*.log
+*.tmp
+*.bak

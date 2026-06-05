@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "title": "Secured-AVD marketplace image alias map",
+  "description": "Canonical alias-to-imageReference map. The 'alias' key (e.g. 'win11-24h2-avd-m365') is what users pass via the imageReference variable. Image SKUs are pinned to 'latest' for floor-version freshness; pin to a specific version in production via the version key.",
+  "version": "1.0.0",
+  "images": {
+    "win11-24h2-avd-m365": {
+      "displayName": "Windows 11 Enterprise multi-session, version 24H2 + Microsoft 365 Apps",
+      "publisher": "microsoftwindowsdesktop",
+      "offer": "office-365",
+      "sku": "win11-24h2-avd-m365",
+      "version": "latest",
+      "recommendedFor": "Pooled host pools with Office 365 ProPlus users (most common AVD profile)"
+    },
+    "win11-24h2-avd": {
+      "displayName": "Windows 11 Enterprise multi-session, version 24H2",
+      "publisher": "microsoftwindowsdesktop",
+      "offer": "windows-11",
+      "sku": "win11-24h2-avd",
+      "version": "latest",
+      "recommendedFor": "Pooled host pools without bundled M365 (BYO Office or no Office)"
+    },
+    "win11-24h2-ent": {
+      "displayName": "Windows 11 Enterprise (single-session), version 24H2",
+      "publisher": "microsoftwindowsdesktop",
+      "offer": "windows-11",
+      "sku": "win11-24h2-ent",
+      "version": "latest",
+      "recommendedFor": "Personal host pools (1:1 user-to-VM)"
+    },
+    "win11-23h2-avd-m365": {
+      "displayName": "Windows 11 Enterprise multi-session, version 23H2 + Microsoft 365 Apps",
+      "publisher": "microsoftwindowsdesktop",
+      "offer": "office-365",
+      "sku": "win11-23h2-avd-m365",
+      "version": "latest",
+      "recommendedFor": "Fleets pinned to 23H2 until 24H2 burn-in complete"
+    },
+    "win10-22h2-avd-m365": {
+      "displayName": "Windows 10 Enterprise multi-session, 22H2 + Microsoft 365 Apps",
+      "publisher": "microsoftwindowsdesktop",
+      "offer": "office-365",
+      "sku": "win10-22h2-avd-m365-g2",
+      "version": "latest",
+      "recommendedFor": "Legacy Windows 10 fleets (Win10 EOL Oct 2025 — plan migration)"
+    }
+  }
+}
