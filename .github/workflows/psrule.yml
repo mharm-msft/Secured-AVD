@@ -90,13 +90,16 @@ jobs:
           if ($resultCount -gt 0) {
             Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ""
             Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "### Findings by rule"
-            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "| Rule | Count |"
-            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "|---|---|"
-            $results | Group-Object ruleId | Sort-Object Count -Descending | ForEach-Object {
-              Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "| $($_.Name) | $($_.Count) |"
+            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "| Rule | Count | Sample message |"
+            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "|---|---|---|"
+            $results | Group-Object { $_.rule.id } | Sort-Object Count -Descending | ForEach-Object {
+              $sample = $_.Group[0].message.text -replace '\|','\\|'
+              Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "| $($_.Name) | $($_.Count) | $sample |"
             }
             Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ""
             Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "Full details available in the Security tab → Code Scanning → PSRule category."
+            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ""
+            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "_Note: PSRule v2.9 SARIF stores rule IDs under \`result.rule.id\` (nested), not the flat \`result.ruleId\` field._"
           }
 
       - name: Upload SARIF to Code Scanning
