@@ -51,7 +51,15 @@ jobs:
           outputFormat: Sarif
           outputPath: ps-rule-results.sarif
           summary: true
-        continue-on-error: true   # don't block the merge on advisory findings yet
+        # v1.1.0+: PSRule is a BLOCKING gate. Default behavior (no
+        # continue-on-error) means any rule failure fails the workflow
+        # and the PR. The repo achieved a 0-findings clean baseline on
+        # commit 3bac9ec (2026-06-05) — see ps-rule.yaml's rule.exclude
+        # block for design-choice suppressions with justification.
+        # If a future PSRule.Rules.Azure release introduces a new rule
+        # that fails on this repo, EITHER fix the underlying resource
+        # OR add the rule to ps-rule.yaml's exclude block with a
+        # written justification — don't re-enable continue-on-error.
 
       # Sanity check: detect the "PSRule scanned 0 rules" silent-failure mode
       # we hit on the first run (bad inputPath + obsolete baseline both made
