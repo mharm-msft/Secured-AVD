@@ -32,26 +32,28 @@ jobs:
           terraform_wrapper: false
 
       - name: terraform fmt -check -recursive
-        working-directory: ${{ matrix.stack }}
         run: |
-          if [ ! -f main.tf ] && [ ! -f providers.tf ]; then
+          if [ ! -d "${{ matrix.stack }}" ] || { [ ! -f "${{ matrix.stack }}/main.tf" ] && [ ! -f "${{ matrix.stack }}/providers.tf" ]; }; then
             echo "No Terraform yet under ${{ matrix.stack }} — skipping."
             exit 0
           fi
+          cd "${{ matrix.stack }}"
           terraform fmt -check -recursive -diff
 
       - name: terraform init -backend=false
-        working-directory: ${{ matrix.stack }}
         run: |
-          if [ ! -f main.tf ] && [ ! -f providers.tf ]; then
+          if [ ! -d "${{ matrix.stack }}" ] || { [ ! -f "${{ matrix.stack }}/main.tf" ] && [ ! -f "${{ matrix.stack }}/providers.tf" ]; }; then
+            echo "No Terraform yet under ${{ matrix.stack }} — skipping."
             exit 0
           fi
+          cd "${{ matrix.stack }}"
           terraform init -backend=false -input=false
 
       - name: terraform validate
-        working-directory: ${{ matrix.stack }}
         run: |
-          if [ ! -f main.tf ] && [ ! -f providers.tf ]; then
+          if [ ! -d "${{ matrix.stack }}" ] || { [ ! -f "${{ matrix.stack }}/main.tf" ] && [ ! -f "${{ matrix.stack }}/providers.tf" ]; }; then
+            echo "No Terraform yet under ${{ matrix.stack }} — skipping."
             exit 0
           fi
+          cd "${{ matrix.stack }}"
           terraform validate
