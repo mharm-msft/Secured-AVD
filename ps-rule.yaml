@@ -1,0 +1,55 @@
+# =============================================================================
+# ps-rule.yaml — PSRule for Azure configuration.
+#
+# Tunes which Microsoft AVMsec / CAF rules apply to this repo. Reference:
+#   https://azure.github.io/PSRule.Rules.Azure/setup/configuring-options/
+#
+# Rules that don't make sense for a reference architecture (e.g. requires
+# explicit cost tags from a specific naming standard) are suppressed below
+# with justification.
+# =============================================================================
+
+# Treat Bicep + ARM as the input formats we care about.
+input:
+  format: File
+  pathIgnore:
+    - '.github/'
+    - 'docs/'
+    - 'terraform/'      # Terraform validated separately
+    - 'shared/'
+    - '**/*.md'
+    - '**/.terraform/**'
+
+# Use the GA baseline rather than preview — stability for a reference architecture.
+binding:
+  preferTargetInfo: true
+
+execution:
+  duplicateResourceId: Warn
+  unprocessedObject: Ignore
+
+# Suppress rules that conflict with the demo posture of a reference architecture.
+# Each suppression must carry a justification — never silently suppress.
+suppression:
+  Azure.Resource.UseTags:
+    # We DO tag every resource (mergedTags in locals/network/etc.), but PSRule
+    # can't always trace tags through bicep modules. The tag is set; the warning
+    # is a false positive at the module-boundary level.
+    - greenfield
+    - cutover
+  Azure.VM.Standalone:
+    # Reference architecture deploys vmCount = 2 by default with AvailabilityZones,
+    # but the rule expects an explicit AvailabilitySet or VMSS. AZ deployment is
+    # the modern equivalent and is acceptable.
+    - greenfield
+    - cutover
+
+configuration:
+  # Required by Azure.MultiRegion rules. This is a single-region reference, by design.
+  AZURE_PARAMETER_FILE_EXPANSION: true
+
+# Output verbosity — keep summary terse; full violations land in SARIF.
+output:
+  banner: Minimal
+  culture:
+    - en-US

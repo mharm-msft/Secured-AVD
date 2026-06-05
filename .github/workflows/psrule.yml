@@ -1,0 +1,58 @@
+name: psrule
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'bicep/**'
+      - 'arm/**'
+      - '.github/workflows/psrule.yml'
+      - 'ps-rule.yaml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'bicep/**'
+      - 'arm/**'
+      - '.github/workflows/psrule.yml'
+      - 'ps-rule.yaml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write   # so SARIF results show up in Code Scanning
+
+jobs:
+  analyze:
+    name: PSRule for Azure
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # PSRule for Azure runs PowerShell-based rules against Bicep + ARM source.
+      # No Rego authoring required — first-party Microsoft rule set covers
+      # AVMsec, Azure Well-Architected, and Cloud Adoption Framework guidance.
+      - name: Run PSRule for Azure
+        uses: microsoft/ps-rule@v2.9.0
+        with:
+          modules: 'PSRule.Rules.Azure'
+          baseline: 'Azure.GA_2024_03'
+          inputPath: 'bicep/ arm/'
+          outputFormat: Sarif
+          outputPath: ps-rule-results.sarif
+          summary: true
+        continue-on-error: true   # don't block the merge on advisory findings yet
+
+      - name: Upload SARIF to Code Scanning
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: ps-rule-results.sarif
+          category: psrule
+
+      - name: Upload SARIF artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ps-rule-results
+          path: ps-rule-results.sarif
+          retention-days: 30

@@ -1,0 +1,143 @@
+name: arm-validate
+
+# =============================================================================
+# arm-validate.yml — `az deployment what-if` against a sandbox subscription.
+#
+# Provides REAL deployment-time validation: schema, RBAC, quota, dependency
+# graph, and a diff preview. Catches things bicep-build cannot (e.g. invalid
+# SKU in target region, missing Entra group OID, role assignment scope error).
+#
+# REQUIRES THESE REPO SECRETS / VARS to actually run:
+#   secret  AZURE_CREDENTIALS                JSON output of `az ad sp create-for-rbac --sdk-auth`
+#   var     SANDBOX_SUBSCRIPTION_ID          subscription with rights to create the rg
+#   var     SANDBOX_RESOURCE_GROUP           rg name; will be created if missing
+#   var     SANDBOX_LOCATION                 e.g. eastus2
+#   var     SANDBOX_DESKTOP_USER_GROUP_OID   real Entra group OID for what-if to pass param validation
+#
+# If AZURE_CREDENTIALS is unset, the job no-ops with a clear message instead of
+# failing. This lets the workflow live in the repo before the secret is wired.
+# =============================================================================
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'bicep/**'
+      - 'arm/**'
+      - '.github/workflows/arm-validate.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'bicep/**'
+      - 'arm/**'
+  workflow_dispatch:
+    inputs:
+      stack:
+        description: 'Which stack to what-if (greenfield, cutover, or both)'
+        required: true
+        default: 'both'
+        type: choice
+        options: [greenfield, cutover, both]
+
+permissions:
+  contents: read
+  id-token: write   # for OIDC if user switches off client-secret auth later
+
+jobs:
+  preflight:
+    name: Preflight — check secret presence
+    runs-on: ubuntu-latest
+    outputs:
+      ready: ${{ steps.check.outputs.ready }}
+    steps:
+      - name: Check AZURE_CREDENTIALS is present
+        id: check
+        env:
+          AZ_CREDS: ${{ secrets.AZURE_CREDENTIALS }}
+        run: |
+          if [ -z "$AZ_CREDS" ]; then
+            echo "::notice::AZURE_CREDENTIALS secret not set; arm-validate is a no-op until configured. See .github/workflows/arm-validate.yml header."
+            echo "ready=false" >> $GITHUB_OUTPUT
+          else
+            echo "ready=true" >> $GITHUB_OUTPUT
+          fi
+
+  whatif:
+    name: what-if (${{ matrix.stack }})
+    needs: preflight
+    if: needs.preflight.outputs.ready == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        stack:
+          - greenfield
+          - cutover
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Ensure sandbox resource group
+        run: |
+          az group create \
+            --subscription "${{ vars.SANDBOX_SUBSCRIPTION_ID }}" \
+            --name "${{ vars.SANDBOX_RESOURCE_GROUP }}-${{ matrix.stack }}" \
+            --location "${{ vars.SANDBOX_LOCATION }}" \
+            --tags managedBy=arm-validate-ci stack=${{ matrix.stack }} \
+            --output none
+
+      - name: Override sensitive params
+        id: params
+        env:
+          ADMIN_PASSWORD: ${{ secrets.SANDBOX_ADMIN_PASSWORD }}
+        run: |
+          # Generate a one-shot password if the optional secret is not set.
+          if [ -z "$ADMIN_PASSWORD" ]; then
+            ADMIN_PASSWORD="ChangeMe_$(openssl rand -hex 8)!1"
+          fi
+          echo "::add-mask::$ADMIN_PASSWORD"
+          echo "admin_password=$ADMIN_PASSWORD" >> $GITHUB_OUTPUT
+
+      - name: az deployment what-if
+        run: |
+          set -e
+          STACK="${{ matrix.stack }}"
+          RG="${{ vars.SANDBOX_RESOURCE_GROUP }}-$STACK"
+          SUB="${{ vars.SANDBOX_SUBSCRIPTION_ID }}"
+          DESKTOP_GROUP="${{ vars.SANDBOX_DESKTOP_USER_GROUP_OID }}"
+
+          EXTRA_PARAMS=""
+          if [ "$STACK" = "cutover" ]; then
+            # Use a placeholder ID — what-if won't try to read it, just validates the resource path format.
+            EXISTING_HP="/subscriptions/$SUB/resourceGroups/$RG/providers/Microsoft.DesktopVirtualization/hostPools/old-hp-placeholder"
+            EXISTING_WS="/subscriptions/$SUB/resourceGroups/$RG/providers/Microsoft.DesktopVirtualization/workspaces/old-ws-placeholder"
+            EXTRA_PARAMS="existingHostPoolResourceId=$EXISTING_HP existingWorkspaceResourceId=$EXISTING_WS drainOldHostPool=false"
+          fi
+
+          az deployment group what-if \
+            --subscription "$SUB" \
+            --resource-group "$RG" \
+            --template-file "bicep/$STACK/main.bicep" \
+            --parameters "bicep/$STACK/main.bicepparam" \
+            --parameters \
+              adminPassword='${{ steps.params.outputs.admin_password }}' \
+              desktopUserGroupObjectId="$DESKTOP_GROUP" \
+              $EXTRA_PARAMS \
+            --result-format FullResourcePayloads
+        env:
+          AZURE_CORE_OUTPUT: json
+
+  summarize:
+    name: Summarize
+    needs: [preflight, whatif]
+    if: always() && needs.preflight.outputs.ready == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Result
+        run: |
+          echo "what-if results for ${{ github.sha }}: see job logs above."
+          echo "Note: what-if is advisory — a failure here means the deployment would have failed; a success means schema + dependency graph + RBAC are all satisfiable in the sandbox sub."
