@@ -54,36 +54,49 @@ jobs:
         continue-on-error: true   # don't block the merge on advisory findings yet
 
       # Sanity check: detect the "PSRule scanned 0 rules" silent-failure mode
-      # we hit on the first run. If the SARIF shows the tool ran but zero rules
-      # were processed, that's a configuration bug — fail the job.
+      # we hit on the first run (bad inputPath + obsolete baseline both made
+      # the action exit non-zero, but continue-on-error masked it).
+      #
+      # Truth source: steps.psrule.outcome is the PRE-continue-on-error outcome.
+      # 'failure' here means PSRule itself errored (path resolution, module load,
+      # bad baseline). If that's set AND there are no findings, it's a silent
+      # failure and we should hard-fail the verify step.
+      #
+      # Note: SARIF's tool.driver.rules array only contains rules that fired,
+      # not the full registered rule catalog — counting it is meaningless.
+      # We count results (findings) instead.
       - name: Verify PSRule actually ran
         if: always()
         shell: pwsh
+        env:
+          PSRULE_OUTCOME: ${{ steps.psrule.outcome }}
         run: |
           if (-not (Test-Path ps-rule-results.sarif)) {
-            Write-Error "PSRule did not produce a SARIF file. Action likely failed before execution."
+            Write-Error "PSRule did not produce a SARIF file. Action failed before execution."
             exit 1
           }
           $sarif = Get-Content ps-rule-results.sarif -Raw | ConvertFrom-Json
-          $results = $sarif.runs[0].results
-          $rules = $sarif.runs[0].tool.driver.rules
-          $resultCount = if ($null -eq $results) { 0 } else { $results.Count }
-          $ruleCount = if ($null -eq $rules) { 0 } else { $rules.Count }
-          $summary = "PSRule: $ruleCount rules registered, $resultCount findings."
+          $results = @($sarif.runs[0].results)
+          $resultCount = $results.Count
+          $outcome = $env:PSRULE_OUTCOME
+          $summary = "PSRule outcome: $outcome | findings: $resultCount"
           Write-Host $summary
           Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "## PSRule for Azure"
           Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value $summary
-          if ($ruleCount -eq 0) {
-            Write-Error "PSRule registered 0 rules — silent-failure detected. Likely cause: bad inputPath, missing module, or obsolete baseline. Check the 'Run PSRule for Azure' step above."
+          if ($outcome -eq 'failure' -and $resultCount -eq 0) {
+            Write-Error "PSRule action failed AND produced no findings — silent-failure detected. Check the 'Run PSRule for Azure' step output above for the real cause (likely a bad path, missing module, or obsolete baseline)."
             exit 1
           }
           if ($resultCount -gt 0) {
             Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ""
+            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "### Findings by rule"
             Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "| Rule | Count |"
             Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "|---|---|"
             $results | Group-Object ruleId | Sort-Object Count -Descending | ForEach-Object {
               Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "| $($_.Name) | $($_.Count) |"
             }
+            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ""
+            Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value "Full details available in the Security tab → Code Scanning → PSRule category."
           }
 
       - name: Upload SARIF to Code Scanning
