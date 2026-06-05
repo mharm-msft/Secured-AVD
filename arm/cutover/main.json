@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.43.8.12551",
-      "templateHash": "12946429494378161057"
+      "templateHash": "12907469796874755970"
     }
   },
   "parameters": {
@@ -2014,7 +2014,7 @@
     },
     "drainOldHostPoolPowerShellSnippet": {
       "type": "string",
-      "value": "[if(parameters('drainOldHostPool'), '# === DRAIN OLD HOST POOL ===========================================================\r\n# This sets allowNewSession = $false on every existing session host in the OLD host\r\n# pool, blocking new connections while letting current sessions disconnect on their\r\n# own schedule. Existing users stay productive; new connections route to the NEW\r\n# stack once you publish the new workspace to them.\r\nConnect-AzAccount -SubscriptionId ''${oldHpSubId}''\r\nGet-AzWvdSessionHost -ResourceGroupName ''${oldHpRg}'' -HostPoolName ''${oldHpName}'' \\\r\n  | ForEach-Object {\r\n      $name = $_.Name.Split(''/'')[-1]\r\n      Write-Host \"Draining $name\"\r\n      Update-AzWvdSessionHost -ResourceGroupName ''${oldHpRg}'' -HostPoolName ''${oldHpName}'' \\\r\n        -Name $name -AllowNewSession:$false\r\n    }\r\n# ===================================================================================\r\n', '')]"
+      "value": "[if(parameters('drainOldHostPool'), '# === DRAIN OLD HOST POOL ===========================================================\n# This sets allowNewSession = $false on every existing session host in the OLD host\n# pool, blocking new connections while letting current sessions disconnect on their\n# own schedule. Existing users stay productive; new connections route to the NEW\n# stack once you publish the new workspace to them.\nConnect-AzAccount -SubscriptionId ''${oldHpSubId}''\nGet-AzWvdSessionHost -ResourceGroupName ''${oldHpRg}'' -HostPoolName ''${oldHpName}'' \\\n  | ForEach-Object {\n      $name = $_.Name.Split(''/'')[-1]\n      Write-Host \"Draining $name\"\n      Update-AzWvdSessionHost -ResourceGroupName ''${oldHpRg}'' -HostPoolName ''${oldHpName}'' \\\n        -Name $name -AllowNewSession:$false\n    }\n# ===================================================================================\n', '')]"
     },
     "cutoverChecklist": {
       "type": "array",

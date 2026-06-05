@@ -1,0 +1,33 @@
+# =============================================================================
+# .gitattributes — keep line endings consistent across Win/Mac/Linux contributors
+# and CI. Critical for IaC files because bicep/ARM/JSON serialize embedded
+# multi-line strings byte-for-byte: a stray \r\n in source becomes \r\n in the
+# generated artifact, which then drifts from CI's Linux build.
+# =============================================================================
+
+# Default: auto-detect, normalize to LF in repo, convert to native on checkout.
+* text=auto
+
+# IaC source — always LF in repo AND working tree, on every platform.
+*.bicep         text eol=lf
+*.bicepparam    text eol=lf
+*.tf            text eol=lf
+*.tfvars        text eol=lf
+*.json          text eol=lf
+*.yml           text eol=lf
+*.yaml          text eol=lf
+*.md            text eol=lf
+*.sh            text eol=lf
+
+# Windows-native shells stay CRLF (don't be clever).
+*.ps1           text eol=crlf
+*.psm1          text eol=crlf
+*.cmd           text eol=crlf
+*.bat           text eol=crlf
+
+# Binary — don't touch.
+*.png           binary
+*.jpg           binary
+*.pdf           binary
+*.zip           binary
+*.gz            binary
