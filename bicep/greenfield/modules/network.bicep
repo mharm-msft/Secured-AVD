@@ -32,13 +32,46 @@ var nsgMgmtName   = '${namingPrefix}-${environment}-nsg-mgmt-${locShort}'
 var natGwName     = '${namingPrefix}-${environment}-natgw-${locShort}'
 var natPipName    = '${namingPrefix}-${environment}-natgw-pip-${locShort}'
 
-// Explicit Deny rules at the bottom of every NSG. PSRule Azure.NSG.LateralTraversal
-// (AZR-000139) wants explicit Deny rules for RDP/SSH from ANY source — the implicit
-// DenyAll at 65500 is not considered protection because rule ordering can be mutated
-// during ops changes. These rules sit at high priority numbers (4000+) so they fire
-// last among Deny rules but above the implicit deny, and intentionally block 3389/22
-// from any source including intra-VNet (AVD reverse-connect is outbound, never inbound).
+// Common rule block applied to every NSG. Includes:
+//  1. AllowLoadBalancerHealthInbound — required by Azure.NSG.DenyAllInbound (AZR-000138),
+//     a reliability rule. Without an explicit allow for the AzureLoadBalancer service tag,
+//     a catch-all inbound deny will break LB health probes for any current/future LB
+//     attached to the subnet (private link, internal LB, gateway LB).
+//  2. Inbound deny RDP/SSH — defense in depth against rule-ordering mutation by ops.
+//  3. Outbound deny RDP/SSH — required by Azure.NSG.LateralTraversal (AZR-000139),
+//     prevents an attacker on a session host from hopping laterally to other VMs in the
+//     VNet over RDP/SSH. RDP Shortpath managed-networks uses UDP 3390 (not 3389), so this
+//     does not interfere with Shortpath.
+//  4. Inbound catch-all deny for Internet — explicit posture statement above implicit 65500.
 var commonDenyRules = [
+  {
+    name: 'Allow-AzureLoadBalancer-In'
+    properties: {
+      description: 'Required by Azure.NSG.DenyAllInbound reliability rule — allows Azure load-balancer health probes so explicit deny-all-inbound below does not break PE / LB / health probe paths.'
+      priority: 100
+      direction: 'Inbound'
+      access: 'Allow'
+      protocol: '*'
+      sourceAddressPrefix: 'AzureLoadBalancer'
+      sourcePortRange: '*'
+      destinationAddressPrefix: '*'
+      destinationPortRange: '*'
+    }
+  }
+  {
+    name: 'Deny-Out-RDP-SSH-Hop'
+    properties: {
+      description: 'Lateral-traversal prevention (Azure.NSG.LateralTraversal). Blocks outbound RDP/SSH from any host in this NSG to anywhere in the VNet so a compromised session host cannot pivot to other VMs. RDP Shortpath uses UDP 3390, not affected.'
+      priority: 200
+      direction: 'Outbound'
+      access: 'Deny'
+      protocol: '*'
+      sourceAddressPrefix: 'VirtualNetwork'
+      sourcePortRange: '*'
+      destinationAddressPrefix: '*'
+      destinationPortRanges: [ '3389', '22' ]
+    }
+  }
   {
     name: 'Deny-Any-In-RDP-3389'
     properties: {

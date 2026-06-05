@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.43.8.12551",
-      "templateHash": "13460093994275617622"
+      "templateHash": "12734095142781077130"
     }
   },
   "parameters": {
@@ -443,7 +443,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.43.8.12551",
-              "templateHash": "14988164601707916957"
+              "templateHash": "3232273337326673326"
             }
           },
           "parameters": {
@@ -506,6 +506,37 @@
             "natGwName": "[format('{0}-{1}-natgw-{2}', parameters('namingPrefix'), parameters('environment'), parameters('locShort'))]",
             "natPipName": "[format('{0}-{1}-natgw-pip-{2}', parameters('namingPrefix'), parameters('environment'), parameters('locShort'))]",
             "commonDenyRules": [
+              {
+                "name": "Allow-AzureLoadBalancer-In",
+                "properties": {
+                  "description": "Required by Azure.NSG.DenyAllInbound reliability rule — allows Azure load-balancer health probes so explicit deny-all-inbound below does not break PE / LB / health probe paths.",
+                  "priority": 100,
+                  "direction": "Inbound",
+                  "access": "Allow",
+                  "protocol": "*",
+                  "sourceAddressPrefix": "AzureLoadBalancer",
+                  "sourcePortRange": "*",
+                  "destinationAddressPrefix": "*",
+                  "destinationPortRange": "*"
+                }
+              },
+              {
+                "name": "Deny-Out-RDP-SSH-Hop",
+                "properties": {
+                  "description": "Lateral-traversal prevention (Azure.NSG.LateralTraversal). Blocks outbound RDP/SSH from any host in this NSG to anywhere in the VNet so a compromised session host cannot pivot to other VMs. RDP Shortpath uses UDP 3390, not affected.",
+                  "priority": 200,
+                  "direction": "Outbound",
+                  "access": "Deny",
+                  "protocol": "*",
+                  "sourceAddressPrefix": "VirtualNetwork",
+                  "sourcePortRange": "*",
+                  "destinationAddressPrefix": "*",
+                  "destinationPortRanges": [
+                    "3389",
+                    "22"
+                  ]
+                }
+              },
               {
                 "name": "Deny-Any-In-RDP-3389",
                 "properties": {

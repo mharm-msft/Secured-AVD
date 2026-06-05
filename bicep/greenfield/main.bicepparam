@@ -57,10 +57,12 @@ param imageReference     = {
 }
 param adminUsername  = 'savdadmin'
 // CANONICAL: param adminPassword = az.getSecret('<subId>','<kvRg>','<kvName>','savd-local-admin')
-// The line below sources the password from the SAVD_ADMIN_PASSWORD env var with NO default —
-// builds fail loud if the operator forgets to set it. For real deployments, replace with the
-// az.getSecret() call above so the value never leaves the keyvault control plane.
-param adminPassword  = readEnvironmentVariable('SAVD_ADMIN_PASSWORD')
+// The line below sources the password from the SAVD_ADMIN_PASSWORD env var. A non-secret
+// placeholder default lets PSRule's `bicep build-params` compile this file in CI without the
+// env var set — the placeholder is NEVER used for a real deployment. For real deployments,
+// either (a) export SAVD_ADMIN_PASSWORD in the shell, (b) pass --parameters at deploy time,
+// or (c) replace with the az.getSecret() call above so the value never leaves Key Vault.
+param adminPassword  = readEnvironmentVariable('SAVD_ADMIN_PASSWORD', 'PLACEHOLDER-PSRule-Scan-Only-Set-Real-Value-At-Deploy-Time')
 
 // identity
 param enableIntuneEnrollment    = true

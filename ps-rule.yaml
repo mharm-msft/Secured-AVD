@@ -72,6 +72,21 @@ rule:
     # don't carry the host-pool resource shape. Already mitigated structurally in
     # host-pool.bicep; this exclusion suppresses the redundant param-file scan.
     - Azure.AVD.ScheduleAgentUpdate
+    # AZR-000242 (Azure.VM.OSDiskCache) — performance-efficiency L1 rule that asserts
+    # OS disk caching equals the default 'ReadWrite'. For AVD session hosts using
+    # FSLogix on Azure Files, the OS disk experiences mostly READ activity (Windows
+    # binaries, .NET, drivers — profile writes go to FSLogix). Microsoft AVD guidance
+    # explicitly recommends 'ReadOnly' OS disk caching with Premium_LRS for this exact
+    # workload pattern. The PSRule heuristic is wrong for AVD.
+    # Ref: https://learn.microsoft.com/en-us/azure/virtual-desktop/disk-performance
+    - Azure.VM.OSDiskCache
+    # AZR-000235 (Azure.Template.UseDescriptions) — checks for @description on EVERY
+    # compiled inner resource in the ARM output. We DO have @description on all 7
+    # module calls in main.bicep (greenfield + cutover), which is the right level of
+    # abstraction for IaC review (one description per architectural component, not
+    # per network interface / disk extension / private DNS A-record). Per-resource
+    # descriptions across 100+ inner resources are noise that obscures real findings.
+    - Azure.Template.UseDescriptions
 
 # Suppress rules that conflict with the demo posture of a reference architecture.
 # Resource-name-targeted suppressions (each must carry justification).
