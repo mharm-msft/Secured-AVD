@@ -59,8 +59,11 @@ param imageReference     = {
   alias: 'win11-24h2-avd-m365'
 }
 param adminUsername  = 'savdadmin'
-// In production: param adminPassword = az.getSecret('<subId>','<kvRg>','<kvName>','savd-local-admin')
-param adminPassword  = readEnvironmentVariable('SAVD_ADMIN_PASSWORD', 'ChangeMeBeforeDeploy!1')
+// CANONICAL: param adminPassword = az.getSecret('<subId>','<kvRg>','<kvName>','savd-local-admin')
+// The line below sources the password from the SAVD_ADMIN_PASSWORD env var with NO default —
+// builds fail loud if the operator forgets to set it. For real deployments, replace with the
+// az.getSecret() call above so the value never leaves the keyvault control plane.
+param adminPassword  = readEnvironmentVariable('SAVD_ADMIN_PASSWORD')
 
 // identity — usually SAME group as old stack so users access both during cutover
 param enableIntuneEnrollment    = true

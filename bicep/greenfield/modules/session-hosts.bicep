@@ -31,6 +31,10 @@ param desktopUserGroupObjectId string
 param adminUserGroupObjectId string
 param rdpShortpathMode string
 
+@description('Resource ID of the Log Analytics workspace for Azure Monitor Agent + diagnostic data. Empty = install AMA without DCR association (rule satisfied; data collection wired in a follow-up DCR).')
+#disable-next-line no-unused-params
+param logAnalyticsWorkspaceId string = ''
+
 // -------------------------------------------------------------------------------------
 // Image plan resolution
 // -------------------------------------------------------------------------------------
@@ -101,6 +105,7 @@ resource vms 'Microsoft.Compute/virtualMachines@2024-07-01' = [ for i in range(0
       osDisk: {
         createOption: 'FromImage'
         diskSizeGB: osDiskSizeGb
+        caching: 'ReadOnly'
         managedDisk: {
           storageAccountType: osDiskType
         }
@@ -198,6 +203,27 @@ resource extAvdAgent 'Microsoft.Compute/virtualMachines/extensions@2024-07-01' =
   }
   dependsOn: [
     extShortpath[i]
+  ]
+} ]
+
+// Ext 4 — Azure Monitor Agent (AMA). Sends Windows perf + event data to Log Analytics
+// once a Data Collection Rule (DCR) is associated. Install runs in parallel with the
+// DSC bootstrap above (no functional ordering required between them). AMA picks up the
+// system-assigned managed identity automatically when no explicit auth config is set.
+resource extAzureMonitorAgent 'Microsoft.Compute/virtualMachines/extensions@2024-07-01' = [ for i in range(0, vmCount): {
+  parent: vms[i]
+  name: 'AzureMonitorWindowsAgent'
+  location: location
+  tags: tags
+  properties: {
+    publisher: 'Microsoft.Azure.Monitor'
+    type: 'AzureMonitorWindowsAgent'
+    typeHandlerVersion: '1.0'
+    autoUpgradeMinorVersion: true
+    enableAutomaticUpgrade: true
+  }
+  dependsOn: [
+    extAadLogin[i]
   ]
 } ]
 

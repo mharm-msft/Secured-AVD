@@ -40,6 +40,20 @@ resource hostPool 'Microsoft.DesktopVirtualization/hostPools@2024-04-03' = {
       expirationTime: tokenExpiration
       registrationTokenOperation: 'Update'
     }
+    // Schedule AVD agent + boot-loader + side-by-side stack updates to a low-traffic
+    // window so they don't disrupt active users. Default = Sunday 03:00 session-host
+    // local time. Operators can override the schedule by deploying a child agentUpdate
+    // resource or by direct PATCH.
+    agentUpdate: {
+      type: 'Scheduled'
+      useSessionHostLocalTime: true
+      maintenanceWindows: [
+        {
+          dayOfWeek: 'Sunday'
+          hour: 3
+        }
+      ]
+    }
   }
 }
 

@@ -6,7 +6,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.43.8.12551",
-      "templateHash": "15719453756020901445"
+      "templateHash": "354476440158788316"
     }
   },
   "parameters": {
@@ -399,7 +399,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.43.8.12551",
-              "templateHash": "16699246157091853552"
+              "templateHash": "14988164601707916957"
             }
           },
           "parameters": {
@@ -441,6 +441,13 @@
             },
             "locShort": {
               "type": "string"
+            },
+            "deployNatGateway": {
+              "type": "bool",
+              "defaultValue": true,
+              "metadata": {
+                "description": "Deploy a NAT Gateway + Standard public IP for explicit outbound. When true, subnets set defaultOutboundAccess=false (no implicit default outbound). When false, subnets keep the legacy default outbound IP (deprecated by Microsoft Sept 2025)."
+              }
             }
           },
           "variables": {
@@ -451,7 +458,53 @@
             "allowShortpathEgress": "[or(equals(parameters('rdpShortpathMode'), 'Public'), equals(parameters('rdpShortpathMode'), 'Both'))]",
             "nsgHostsName": "[format('{0}-{1}-nsg-hosts-{2}', parameters('namingPrefix'), parameters('environment'), parameters('locShort'))]",
             "nsgPeName": "[format('{0}-{1}-nsg-pe-{2}', parameters('namingPrefix'), parameters('environment'), parameters('locShort'))]",
-            "nsgMgmtName": "[format('{0}-{1}-nsg-mgmt-{2}', parameters('namingPrefix'), parameters('environment'), parameters('locShort'))]"
+            "nsgMgmtName": "[format('{0}-{1}-nsg-mgmt-{2}', parameters('namingPrefix'), parameters('environment'), parameters('locShort'))]",
+            "natGwName": "[format('{0}-{1}-natgw-{2}', parameters('namingPrefix'), parameters('environment'), parameters('locShort'))]",
+            "natPipName": "[format('{0}-{1}-natgw-pip-{2}', parameters('namingPrefix'), parameters('environment'), parameters('locShort'))]",
+            "commonDenyRules": [
+              {
+                "name": "Deny-Any-In-RDP-3389",
+                "properties": {
+                  "description": "Explicit deny RDP from any source. AVD session hosts use reverse-connect; inbound 3389 is never required.",
+                  "priority": 4000,
+                  "direction": "Inbound",
+                  "access": "Deny",
+                  "protocol": "Tcp",
+                  "sourceAddressPrefix": "*",
+                  "sourcePortRange": "*",
+                  "destinationAddressPrefix": "*",
+                  "destinationPortRange": "3389"
+                }
+              },
+              {
+                "name": "Deny-Any-In-SSH-22",
+                "properties": {
+                  "description": "Explicit deny SSH from any source. AVD session hosts are Windows; no SSH surface expected anywhere in the VNet.",
+                  "priority": 4010,
+                  "direction": "Inbound",
+                  "access": "Deny",
+                  "protocol": "Tcp",
+                  "sourceAddressPrefix": "*",
+                  "sourcePortRange": "*",
+                  "destinationAddressPrefix": "*",
+                  "destinationPortRange": "22"
+                }
+              },
+              {
+                "name": "Deny-Internet-In-Any",
+                "properties": {
+                  "description": "Explicit catch-all deny for inbound traffic from Internet across any port.",
+                  "priority": 4090,
+                  "direction": "Inbound",
+                  "access": "Deny",
+                  "protocol": "*",
+                  "sourceAddressPrefix": "Internet",
+                  "sourcePortRange": "*",
+                  "destinationAddressPrefix": "*",
+                  "destinationPortRange": "*"
+                }
+              }
+            ]
           },
           "resources": [
             {
@@ -461,7 +514,7 @@
               "location": "[parameters('location')]",
               "tags": "[parameters('tags')]",
               "properties": {
-                "securityRules": "[concat(createArray(createObject('name', 'Allow-AVD-Reverse-Connect-Out', 'properties', createObject('description', 'Session hosts reach AVD broker via outbound 443 over WindowsVirtualDesktop service tag (reverse connect).', 'priority', 100, 'direction', 'Outbound', 'access', 'Allow', 'protocol', 'Tcp', 'sourceAddressPrefix', '*', 'sourcePortRange', '*', 'destinationAddressPrefix', 'WindowsVirtualDesktop', 'destinationPortRange', '443')), createObject('name', 'Allow-AzureCloud-Out-443', 'properties', createObject('description', 'Outbound 443 to AzureCloud service tag for management, Storage, Monitor, KeyVault, etc.', 'priority', 110, 'direction', 'Outbound', 'access', 'Allow', 'protocol', 'Tcp', 'sourceAddressPrefix', '*', 'sourcePortRange', '*', 'destinationAddressPrefix', 'AzureCloud', 'destinationPortRange', '443')), createObject('name', 'Allow-AzureActiveDirectory-Out', 'properties', createObject('description', 'Outbound to Entra ID for join, sign-in, token refresh.', 'priority', 120, 'direction', 'Outbound', 'access', 'Allow', 'protocol', 'Tcp', 'sourceAddressPrefix', '*', 'sourcePortRange', '*', 'destinationAddressPrefix', 'AzureActiveDirectory', 'destinationPortRange', '443'))), if(variables('allowShortpathInbound'), createArray(createObject('name', 'Allow-Shortpath-UDP-3390-In', 'properties', createObject('description', 'RDP Shortpath Managed networks: UDP 3390 inbound from intranet (VirtualNetwork tag).', 'priority', 200, 'direction', 'Inbound', 'access', 'Allow', 'protocol', 'Udp', 'sourceAddressPrefix', 'VirtualNetwork', 'sourcePortRange', '*', 'destinationAddressPrefix', '*', 'destinationPortRange', '3390'))), createArray()), if(variables('allowShortpathEgress'), createArray(createObject('name', 'Allow-Shortpath-STUN-Out', 'properties', createObject('description', 'RDP Shortpath Public networks: outbound UDP to STUN/TURN (3478) on Internet.', 'priority', 300, 'direction', 'Outbound', 'access', 'Allow', 'protocol', 'Udp', 'sourceAddressPrefix', '*', 'sourcePortRange', '*', 'destinationAddressPrefix', 'Internet', 'destinationPortRanges', createArray('3478', '3479')))), createArray()))]"
+                "securityRules": "[concat(createArray(createObject('name', 'Allow-AVD-Reverse-Connect-Out', 'properties', createObject('description', 'Session hosts reach AVD broker via outbound 443 over WindowsVirtualDesktop service tag (reverse connect).', 'priority', 100, 'direction', 'Outbound', 'access', 'Allow', 'protocol', 'Tcp', 'sourceAddressPrefix', '*', 'sourcePortRange', '*', 'destinationAddressPrefix', 'WindowsVirtualDesktop', 'destinationPortRange', '443')), createObject('name', 'Allow-AzureCloud-Out-443', 'properties', createObject('description', 'Outbound 443 to AzureCloud service tag for management, Storage, Monitor, KeyVault, etc.', 'priority', 110, 'direction', 'Outbound', 'access', 'Allow', 'protocol', 'Tcp', 'sourceAddressPrefix', '*', 'sourcePortRange', '*', 'destinationAddressPrefix', 'AzureCloud', 'destinationPortRange', '443')), createObject('name', 'Allow-AzureActiveDirectory-Out', 'properties', createObject('description', 'Outbound to Entra ID for join, sign-in, token refresh.', 'priority', 120, 'direction', 'Outbound', 'access', 'Allow', 'protocol', 'Tcp', 'sourceAddressPrefix', '*', 'sourcePortRange', '*', 'destinationAddressPrefix', 'AzureActiveDirectory', 'destinationPortRange', '443'))), if(variables('allowShortpathInbound'), createArray(createObject('name', 'Allow-Shortpath-UDP-3390-In', 'properties', createObject('description', 'RDP Shortpath Managed networks: UDP 3390 inbound from intranet (VirtualNetwork tag).', 'priority', 200, 'direction', 'Inbound', 'access', 'Allow', 'protocol', 'Udp', 'sourceAddressPrefix', 'VirtualNetwork', 'sourcePortRange', '*', 'destinationAddressPrefix', '*', 'destinationPortRange', '3390'))), createArray()), if(variables('allowShortpathEgress'), createArray(createObject('name', 'Allow-Shortpath-STUN-Out', 'properties', createObject('description', 'RDP Shortpath Public networks: outbound UDP to STUN/TURN (3478) on Internet.', 'priority', 300, 'direction', 'Outbound', 'access', 'Allow', 'protocol', 'Udp', 'sourceAddressPrefix', '*', 'sourcePortRange', '*', 'destinationAddressPrefix', 'Internet', 'destinationPortRanges', createArray('3478', '3479')))), createArray()), variables('commonDenyRules'))]"
               }
             },
             {
@@ -471,7 +524,7 @@
               "location": "[parameters('location')]",
               "tags": "[parameters('tags')]",
               "properties": {
-                "securityRules": []
+                "securityRules": "[variables('commonDenyRules')]"
               }
             },
             {
@@ -482,8 +535,54 @@
               "location": "[parameters('location')]",
               "tags": "[parameters('tags')]",
               "properties": {
-                "securityRules": []
+                "securityRules": "[variables('commonDenyRules')]"
               }
+            },
+            {
+              "condition": "[parameters('deployNatGateway')]",
+              "type": "Microsoft.Network/publicIPAddresses",
+              "apiVersion": "2024-01-01",
+              "name": "[variables('natPipName')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "sku": {
+                "name": "Standard"
+              },
+              "zones": [
+                "1",
+                "2",
+                "3"
+              ],
+              "properties": {
+                "publicIPAllocationMethod": "Static",
+                "publicIPAddressVersion": "IPv4",
+                "idleTimeoutInMinutes": 4
+              }
+            },
+            {
+              "condition": "[parameters('deployNatGateway')]",
+              "type": "Microsoft.Network/natGateways",
+              "apiVersion": "2024-01-01",
+              "name": "[variables('natGwName')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "sku": {
+                "name": "Standard"
+              },
+              "zones": [
+                "1"
+              ],
+              "properties": {
+                "idleTimeoutInMinutes": 10,
+                "publicIpAddresses": [
+                  {
+                    "id": "[resourceId('Microsoft.Network/publicIPAddresses', variables('natPipName'))]"
+                  }
+                ]
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Network/publicIPAddresses', variables('natPipName'))]"
+              ]
             },
             {
               "type": "Microsoft.Network/virtualNetworks",
@@ -498,9 +597,10 @@
                   ]
                 },
                 "dhcpOptions": "[if(empty(parameters('dnsServers')), null(), createObject('dnsServers', parameters('dnsServers')))]",
-                "subnets": "[concat(createArray(createObject('name', 'snet-hosts', 'properties', createObject('addressPrefix', parameters('hostsSubnetCidr'), 'networkSecurityGroup', createObject('id', resourceId('Microsoft.Network/networkSecurityGroups', variables('nsgHostsName'))), 'privateEndpointNetworkPolicies', 'Enabled')), createObject('name', 'snet-pe', 'properties', createObject('addressPrefix', parameters('peSubnetCidr'), 'networkSecurityGroup', createObject('id', resourceId('Microsoft.Network/networkSecurityGroups', variables('nsgPeName'))), 'privateEndpointNetworkPolicies', 'Disabled'))), if(variables('deployMgmtSubnet'), createArray(createObject('name', 'snet-mgmt', 'properties', createObject('addressPrefix', parameters('mgmtSubnetCidr'), 'networkSecurityGroup', createObject('id', resourceId('Microsoft.Network/networkSecurityGroups', variables('nsgMgmtName'))), 'privateEndpointNetworkPolicies', 'Enabled'))), createArray()))]"
+                "subnets": "[concat(createArray(createObject('name', 'snet-hosts', 'properties', createObject('addressPrefix', parameters('hostsSubnetCidr'), 'networkSecurityGroup', createObject('id', resourceId('Microsoft.Network/networkSecurityGroups', variables('nsgHostsName'))), 'privateEndpointNetworkPolicies', 'Enabled', 'defaultOutboundAccess', if(parameters('deployNatGateway'), false(), null()), 'natGateway', if(parameters('deployNatGateway'), createObject('id', resourceId('Microsoft.Network/natGateways', variables('natGwName'))), null()))), createObject('name', 'snet-pe', 'properties', createObject('addressPrefix', parameters('peSubnetCidr'), 'networkSecurityGroup', createObject('id', resourceId('Microsoft.Network/networkSecurityGroups', variables('nsgPeName'))), 'privateEndpointNetworkPolicies', 'Disabled', 'defaultOutboundAccess', if(parameters('deployNatGateway'), false(), null())))), if(variables('deployMgmtSubnet'), createArray(createObject('name', 'snet-mgmt', 'properties', createObject('addressPrefix', parameters('mgmtSubnetCidr'), 'networkSecurityGroup', createObject('id', resourceId('Microsoft.Network/networkSecurityGroups', variables('nsgMgmtName'))), 'privateEndpointNetworkPolicies', 'Enabled', 'defaultOutboundAccess', if(parameters('deployNatGateway'), false(), null()), 'natGateway', if(parameters('deployNatGateway'), createObject('id', resourceId('Microsoft.Network/natGateways', variables('natGwName'))), null())))), createArray()))]"
               },
               "dependsOn": [
+                "[resourceId('Microsoft.Network/natGateways', variables('natGwName'))]",
                 "[resourceId('Microsoft.Network/networkSecurityGroups', variables('nsgHostsName'))]",
                 "[resourceId('Microsoft.Network/networkSecurityGroups', variables('nsgMgmtName'))]",
                 "[resourceId('Microsoft.Network/networkSecurityGroups', variables('nsgPeName'))]"
@@ -545,9 +645,20 @@
             "mgmtSubnetId": {
               "type": "string",
               "value": "[if(variables('deployMgmtSubnet'), format('{0}/subnets/snet-mgmt', resourceId('Microsoft.Network/virtualNetworks', parameters('vnetName'))), '')]"
+            },
+            "natGatewayId": {
+              "type": "string",
+              "value": "[if(parameters('deployNatGateway'), resourceId('Microsoft.Network/natGateways', variables('natGwName')), '')]"
+            },
+            "natGatewayPublicIp": {
+              "type": "string",
+              "value": "[if(parameters('deployNatGateway'), coalesce(tryGet(reference(resourceId('Microsoft.Network/publicIPAddresses', variables('natPipName')), '2024-01-01'), 'ipAddress'), ''), '')]"
             }
           }
         }
+      },
+      "metadata": {
+        "description": "Module: VNet + 3 NSGs + 3 subnets (mgmt subnet optional) + optional hub peering + NAT Gateway for explicit outbound."
       }
     },
     "monitoring": {
@@ -634,6 +745,9 @@
             }
           }
         }
+      },
+      "metadata": {
+        "description": "Module: Log Analytics workspace (or BYO via logAnalyticsWorkspaceId) + retention policy."
       }
     },
     "hostPool": {
@@ -691,7 +805,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.43.8.12551",
-              "templateHash": "18435814683019694760"
+              "templateHash": "17991205541020410162"
             }
           },
           "parameters": {
@@ -759,6 +873,16 @@
                 "registrationInfo": {
                   "expirationTime": "[parameters('tokenExpiration')]",
                   "registrationTokenOperation": "Update"
+                },
+                "agentUpdate": {
+                  "type": "Scheduled",
+                  "useSessionHostLocalTime": true,
+                  "maintenanceWindows": [
+                    {
+                      "dayOfWeek": "Sunday",
+                      "hour": 3
+                    }
+                  ]
                 }
               }
             },
@@ -877,6 +1001,9 @@
             }
           }
         }
+      },
+      "metadata": {
+        "description": "Module: AVD host pool (publicNetworkAccess=Disabled) + desktop app group + scaling plan + Desktop Virtualization User RBAC assignment."
       }
     },
     "workspace": {
@@ -956,7 +1083,10 @@
       },
       "dependsOn": [
         "hostPool"
-      ]
+      ],
+      "metadata": {
+        "description": "Module: AVD workspace (publicNetworkAccess=Disabled) referencing the desktop app group."
+      }
     },
     "privateLink": {
       "type": "Microsoft.Resources/deployments",
@@ -1245,7 +1375,10 @@
         "hostPool",
         "network",
         "workspace"
-      ]
+      ],
+      "metadata": {
+        "description": "Module: 2 private DNS zones (privatelink.wvd + privatelink-global.wvd) + 3 private endpoints (connection on host pool, feed + global on workspace)."
+      }
     },
     "fslogix": {
       "condition": "[parameters('enableFSLogix')]",
@@ -1486,7 +1619,10 @@
       },
       "dependsOn": [
         "network"
-      ]
+      ],
+      "metadata": {
+        "description": "Module (optional, gated by enableFSLogix): Azure Files share + Entra Kerberos auth + private endpoint for FSLogix profile containers."
+      }
     },
     "sessionHosts": {
       "type": "Microsoft.Resources/deployments",
@@ -1560,7 +1696,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.43.8.12551",
-              "templateHash": "2776876276337750060"
+              "templateHash": "229697195097476636"
             }
           },
           "parameters": {
@@ -1617,6 +1753,13 @@
             },
             "rdpShortpathMode": {
               "type": "string"
+            },
+            "logAnalyticsWorkspaceId": {
+              "type": "string",
+              "defaultValue": "",
+              "metadata": {
+                "description": "Resource ID of the Log Analytics workspace for Azure Monitor Agent + diagnostic data. Empty = install AMA without DCR association (rule satisfied; data collection wired in a follow-up DCR)."
+              }
             }
           },
           "variables": {
@@ -1730,6 +1873,7 @@
                   "osDisk": {
                     "createOption": "FromImage",
                     "diskSizeGB": "[parameters('osDiskSizeGb')]",
+                    "caching": "ReadOnly",
                     "managedDisk": {
                       "storageAccountType": "[parameters('osDiskType')]"
                     }
@@ -1848,6 +1992,28 @@
             },
             {
               "copy": {
+                "name": "extAzureMonitorAgent",
+                "count": "[length(range(0, parameters('vmCount')))]"
+              },
+              "type": "Microsoft.Compute/virtualMachines/extensions",
+              "apiVersion": "2024-07-01",
+              "name": "[format('{0}/{1}', format('{0}{1}', parameters('vmNamePrefix'), padLeft(string(range(0, parameters('vmCount'))[range(0, parameters('vmCount'))[copyIndex()]]), 2, '0')), 'AzureMonitorWindowsAgent')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "publisher": "Microsoft.Azure.Monitor",
+                "type": "AzureMonitorWindowsAgent",
+                "typeHandlerVersion": "1.0",
+                "autoUpgradeMinorVersion": true,
+                "enableAutomaticUpgrade": true
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.Compute/virtualMachines/extensions', format('{0}{1}', parameters('vmNamePrefix'), padLeft(string(range(0, parameters('vmCount'))[range(0, parameters('vmCount'))[range(0, parameters('vmCount'))[copyIndex()]]]), 2, '0')), 'AADLoginForWindows')]",
+                "[resourceId('Microsoft.Compute/virtualMachines', format('{0}{1}', parameters('vmNamePrefix'), padLeft(string(range(0, parameters('vmCount'))[range(0, parameters('vmCount'))[copyIndex()]]), 2, '0')))]"
+              ]
+            },
+            {
+              "copy": {
                 "name": "roleVmUser",
                 "count": "[length(range(0, parameters('vmCount')))]"
               },
@@ -1908,7 +2074,10 @@
         "hostPool",
         "network",
         "privateLink"
-      ]
+      ],
+      "metadata": {
+        "description": "Module: N Entra-joined session-host VMs + NICs + 4 extensions (AADLoginForWindows, Shortpath registry DSC, AVD-DSC agent install, AzureMonitorWindowsAgent)."
+      }
     }
   },
   "outputs": {

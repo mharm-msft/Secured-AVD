@@ -268,6 +268,7 @@ resource oldWorkspace 'Microsoft.DesktopVirtualization/workspaces@2024-04-03' ex
 // 1. Network — VNet + 3 NSGs + 3 subnets (mgmt subnet optional) + optional hub peering
 //    Modules SHARED with greenfield at ../greenfield/modules/*.bicep
 // =====================================================================================
+@description('Module: VNet + 3 NSGs + 3 subnets (mgmt subnet optional) + optional hub peering + NAT Gateway for explicit outbound. SHARED with greenfield.')
 module network '../greenfield/modules/network.bicep' = {
   name: 'network'
   params: {
@@ -290,6 +291,7 @@ module network '../greenfield/modules/network.bicep' = {
 // =====================================================================================
 // 2. Monitoring — Log Analytics (or BYO; recommend BYO=old stack LAW for cutover)
 // =====================================================================================
+@description('Module: Log Analytics workspace (or BYO via logAnalyticsWorkspaceId — for cutover, recommend BYO to the OLD stack LAW to preserve historical AVDConnections + Heartbeat data).')
 module monitoring '../greenfield/modules/monitoring.bicep' = {
   name: 'monitoring'
   params: {
@@ -304,6 +306,7 @@ module monitoring '../greenfield/modules/monitoring.bicep' = {
 // =====================================================================================
 // 3. Host Pool + Desktop App Group + Scaling Plan + RBAC (NEW)
 // =====================================================================================
+@description('Module: NEW AVD host pool (publicNetworkAccess=Disabled, parallel to legacy) + desktop app group + scaling plan + Desktop Virtualization User RBAC assignment.')
 module hostPool '../greenfield/modules/host-pool.bicep' = {
   name: 'hostPool'
   params: {
@@ -325,6 +328,7 @@ module hostPool '../greenfield/modules/host-pool.bicep' = {
 // =====================================================================================
 // 4. Workspace — attaches the NEW desktop app group
 // =====================================================================================
+@description('Module: NEW AVD workspace (publicNetworkAccess=Disabled) referencing the NEW desktop app group, parallel to the legacy workspace until cutover.')
 module workspace '../greenfield/modules/workspace.bicep' = {
   name: 'workspace'
   params: {
@@ -338,6 +342,7 @@ module workspace '../greenfield/modules/workspace.bicep' = {
 // =====================================================================================
 // 5. Private Link — 2 DNS zones + 3 PEs (after host pool + workspace exist)
 // =====================================================================================
+@description('Module: 2 private DNS zones (privatelink.wvd + privatelink-global.wvd) + 3 private endpoints (connection on NEW host pool, feed + global on NEW workspace).')
 module privateLink '../greenfield/modules/private-link.bicep' = {
   name: 'privateLink'
   params: {
@@ -356,6 +361,7 @@ module privateLink '../greenfield/modules/private-link.bicep' = {
 // =====================================================================================
 // 6. FSLogix (optional) — storage + Entra Kerberos + private endpoint
 // =====================================================================================
+@description('Module (optional, gated by enableFSLogix): Azure Files share + Entra Kerberos auth + private endpoint for FSLogix profile containers (NEW stack).')
 module fslogix '../greenfield/modules/fslogix.bicep' = if (enableFSLogix) {
   name: 'fslogix'
   params: {
@@ -373,6 +379,7 @@ module fslogix '../greenfield/modules/fslogix.bicep' = if (enableFSLogix) {
 // =====================================================================================
 // 7. Session hosts — N VMs, NICs, extensions, registers to NEW host pool
 // =====================================================================================
+@description('Module: N NEW Entra-joined session-host VMs + NICs + 4 extensions (AADLoginForWindows, Shortpath registry DSC, AVD-DSC agent install, AzureMonitorWindowsAgent). Registers to NEW host pool, runs in parallel with legacy until cutover.')
 module sessionHosts '../greenfield/modules/session-hosts.bicep' = {
   name: 'sessionHosts'
   params: {

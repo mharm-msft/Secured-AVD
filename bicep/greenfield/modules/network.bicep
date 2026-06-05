@@ -17,15 +17,71 @@ param namingPrefix string
 param environment string
 param locShort string
 
+@description('Deploy a NAT Gateway + Standard public IP for explicit outbound. When true, subnets set defaultOutboundAccess=false (no implicit default outbound). When false, subnets keep the legacy default outbound IP (deprecated by Microsoft Sept 2025).')
+param deployNatGateway bool = true
+
 var deployMgmtSubnet = !empty(mgmtSubnetCidr)
 var peerWithHub = !empty(hubVnetId)
 var hubVnetName = peerWithHub ? last(split(hubVnetId, '/')) : ''
 var allowShortpathInbound = rdpShortpathMode == 'Managed' || rdpShortpathMode == 'Both'
 var allowShortpathEgress  = rdpShortpathMode == 'Public'  || rdpShortpathMode == 'Both'
 
-var nsgHostsName = '${namingPrefix}-${environment}-nsg-hosts-${locShort}'
-var nsgPeName    = '${namingPrefix}-${environment}-nsg-pe-${locShort}'
-var nsgMgmtName  = '${namingPrefix}-${environment}-nsg-mgmt-${locShort}'
+var nsgHostsName  = '${namingPrefix}-${environment}-nsg-hosts-${locShort}'
+var nsgPeName     = '${namingPrefix}-${environment}-nsg-pe-${locShort}'
+var nsgMgmtName   = '${namingPrefix}-${environment}-nsg-mgmt-${locShort}'
+var natGwName     = '${namingPrefix}-${environment}-natgw-${locShort}'
+var natPipName    = '${namingPrefix}-${environment}-natgw-pip-${locShort}'
+
+// Explicit Deny rules at the bottom of every NSG. PSRule Azure.NSG.LateralTraversal
+// (AZR-000139) wants explicit Deny rules for RDP/SSH from ANY source — the implicit
+// DenyAll at 65500 is not considered protection because rule ordering can be mutated
+// during ops changes. These rules sit at high priority numbers (4000+) so they fire
+// last among Deny rules but above the implicit deny, and intentionally block 3389/22
+// from any source including intra-VNet (AVD reverse-connect is outbound, never inbound).
+var commonDenyRules = [
+  {
+    name: 'Deny-Any-In-RDP-3389'
+    properties: {
+      description: 'Explicit deny RDP from any source. AVD session hosts use reverse-connect; inbound 3389 is never required.'
+      priority: 4000
+      direction: 'Inbound'
+      access: 'Deny'
+      protocol: 'Tcp'
+      sourceAddressPrefix: '*'
+      sourcePortRange: '*'
+      destinationAddressPrefix: '*'
+      destinationPortRange: '3389'
+    }
+  }
+  {
+    name: 'Deny-Any-In-SSH-22'
+    properties: {
+      description: 'Explicit deny SSH from any source. AVD session hosts are Windows; no SSH surface expected anywhere in the VNet.'
+      priority: 4010
+      direction: 'Inbound'
+      access: 'Deny'
+      protocol: 'Tcp'
+      sourceAddressPrefix: '*'
+      sourcePortRange: '*'
+      destinationAddressPrefix: '*'
+      destinationPortRange: '22'
+    }
+  }
+  {
+    name: 'Deny-Internet-In-Any'
+    properties: {
+      description: 'Explicit catch-all deny for inbound traffic from Internet across any port.'
+      priority: 4090
+      direction: 'Inbound'
+      access: 'Deny'
+      protocol: '*'
+      sourceAddressPrefix: 'Internet'
+      sourcePortRange: '*'
+      destinationAddressPrefix: '*'
+      destinationPortRange: '*'
+    }
+  }
+]
 
 // -------------------------------------------------------------------------------------
 // NSGs
@@ -111,7 +167,8 @@ resource nsgHosts 'Microsoft.Network/networkSecurityGroups@2024-01-01' = {
             destinationPortRanges: [ '3478', '3479' ]
           }
         }
-      ] : []
+      ] : [],
+      commonDenyRules
     )
   }
 }
@@ -121,9 +178,10 @@ resource nsgPe 'Microsoft.Network/networkSecurityGroups@2024-01-01' = {
   location: location
   tags: tags
   properties: {
-    // PE subnet is intentionally restrictive: PEs accept inbound from VNet only.
-    // No explicit allow needed — Azure permits intra-VNet by default; default-deny everything else.
-    securityRules: []
+    // PE subnet accepts inbound from VNet only via implicit AllowVnetInbound; explicit
+    // Deny-Internet-In rules below ensure attack ports are blocked even if rule ordering
+    // is later mutated by ops.
+    securityRules: commonDenyRules
   }
 }
 
@@ -132,7 +190,40 @@ resource nsgMgmt 'Microsoft.Network/networkSecurityGroups@2024-01-01' = if (depl
   location: location
   tags: tags
   properties: {
-    securityRules: []
+    securityRules: commonDenyRules
+  }
+}
+
+// -------------------------------------------------------------------------------------
+// NAT Gateway + Standard public IP for explicit outbound (replaces default outbound IP).
+// Microsoft deprecates default outbound access Sept 2025; subnets created after that date
+// without explicit outbound fail to provision. Standard PIP + NAT GW is the canonical
+// replacement and is the basis for zero-trust egress filtering.
+// -------------------------------------------------------------------------------------
+resource natPip 'Microsoft.Network/publicIPAddresses@2024-01-01' = if (deployNatGateway) {
+  name: natPipName
+  location: location
+  tags: tags
+  sku: { name: 'Standard' }
+  zones: [ '1', '2', '3' ]
+  properties: {
+    publicIPAllocationMethod: 'Static'
+    publicIPAddressVersion: 'IPv4'
+    idleTimeoutInMinutes: 4
+  }
+}
+
+resource natGw 'Microsoft.Network/natGateways@2024-01-01' = if (deployNatGateway) {
+  name: natGwName
+  location: location
+  tags: tags
+  sku: { name: 'Standard' }
+  zones: [ '1' ]
+  properties: {
+    idleTimeoutInMinutes: 10
+    publicIpAddresses: [
+      { id: natPip.id }
+    ]
   }
 }
 
@@ -158,6 +249,8 @@ resource vnet 'Microsoft.Network/virtualNetworks@2024-01-01' = {
             addressPrefix: hostsSubnetCidr
             networkSecurityGroup: { id: nsgHosts.id }
             privateEndpointNetworkPolicies: 'Enabled'
+            defaultOutboundAccess: deployNatGateway ? false : null
+            natGateway: deployNatGateway ? { id: natGw.id } : null
           }
         }
         {
@@ -166,6 +259,7 @@ resource vnet 'Microsoft.Network/virtualNetworks@2024-01-01' = {
             addressPrefix: peSubnetCidr
             networkSecurityGroup: { id: nsgPe.id }
             privateEndpointNetworkPolicies: 'Disabled' // PE subnet must disable network policies
+            defaultOutboundAccess: deployNatGateway ? false : null
           }
         }
       ],
@@ -176,6 +270,8 @@ resource vnet 'Microsoft.Network/virtualNetworks@2024-01-01' = {
             addressPrefix: mgmtSubnetCidr
             networkSecurityGroup: { id: nsgMgmt.id }
             privateEndpointNetworkPolicies: 'Enabled'
+            defaultOutboundAccess: deployNatGateway ? false : null
+            natGateway: deployNatGateway ? { id: natGw.id } : null
           }
         }
       ] : []
@@ -208,3 +304,5 @@ output vnetName string = vnet.name
 output hostsSubnetId string = '${vnet.id}/subnets/snet-hosts'
 output peSubnetId string = '${vnet.id}/subnets/snet-pe'
 output mgmtSubnetId string = deployMgmtSubnet ? '${vnet.id}/subnets/snet-mgmt' : ''
+output natGatewayId string = deployNatGateway ? natGw.id : ''
+output natGatewayPublicIp string = deployNatGateway ? (natPip!.properties.?ipAddress ?? '') : ''

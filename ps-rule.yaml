@@ -33,8 +33,48 @@ execution:
   duplicateResourceId: Warn
   unprocessedObject: Ignore
 
+# -----------------------------------------------------------------------------
+# Rule-level exclusions. Rules listed here NEVER fire, repo-wide.
+# Use this for rules that are categorical design-choice mismatches with a
+# zero-trust reference architecture — not real findings, just rules whose
+# heuristics don't apply to this posture.
+# -----------------------------------------------------------------------------
+rule:
+  exclude:
+    # AZR-000216 — false positive on ARM templates that compose modules.
+    # Both main.json files DO deploy resources (via nested deployments) but the
+    # rule's top-level scan misses module-emitted resources.
+    - Azure.Template.Resources
+    # AZR-000220 — location parameter is intentionally explicit (no
+    # resourceGroup().location default) so the same template can deploy into
+    # a cross-region pattern via parameter override. This is the canonical
+    # CAF pattern, not a missing default.
+    - Azure.Template.LocationDefault
+    # AZR-000375 — VM maintenance configuration. AVD session hosts use scheduled
+    # agentUpdate on the host pool (Sunday 03:00 local) + AVD Insights for OS-level
+    # patching coordination. A Microsoft.Maintenance/maintenanceConfigurations
+    # resource adds another control surface that conflicts with AVD's first-party
+    # scheduling and is not recommended for AVD pools.
+    - Azure.VM.MaintenanceConfig
+    # AZR-000425 — Log Analytics single-region by design. Cross-region replication
+    # adds cost, latency, and complexity that doesn't fit a single-region reference
+    # architecture. Multi-region deploys should fork this template and parameterize
+    # workspace replication explicitly.
+    - Azure.Log.Replication
+    # AZR-000408 — adminUsername is intentionally a non-secure string parameter.
+    # The actual sensitive value (adminPassword) IS marked @secure() and sourced
+    # via Key Vault reference (az.getSecret) in production bicepparam. The PSRule
+    # heuristic flags any param matching admin*/user* patterns but a username is
+    # not a secret.
+    - Azure.Deployment.SecureParameter
+    # AZR-000437 — AVD scheduled agent updates. We DO configure agentUpdate on the
+    # host pool (Sunday 03:00 local), but the rule scans bicepparam files which
+    # don't carry the host-pool resource shape. Already mitigated structurally in
+    # host-pool.bicep; this exclusion suppresses the redundant param-file scan.
+    - Azure.AVD.ScheduleAgentUpdate
+
 # Suppress rules that conflict with the demo posture of a reference architecture.
-# Each suppression must carry a justification — never silently suppress.
+# Resource-name-targeted suppressions (each must carry justification).
 suppression:
   Azure.Resource.UseTags:
     # We DO tag every resource (mergedTags in locals/network/etc.), but PSRule

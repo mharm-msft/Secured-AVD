@@ -220,6 +220,7 @@ var mergedTags = union(tags, {
 // =====================================================================================
 // 1. Network — VNet + 3 NSGs + 3 subnets (mgmt subnet optional) + optional hub peering
 // =====================================================================================
+@description('Module: VNet + 3 NSGs + 3 subnets (mgmt subnet optional) + optional hub peering + NAT Gateway for explicit outbound.')
 module network 'modules/network.bicep' = {
   name: 'network'
   params: {
@@ -242,6 +243,7 @@ module network 'modules/network.bicep' = {
 // =====================================================================================
 // 2. Monitoring — Log Analytics (or BYO) + diag settings (host pool + workspace)
 // =====================================================================================
+@description('Module: Log Analytics workspace (or BYO via logAnalyticsWorkspaceId) + retention policy.')
 module monitoring 'modules/monitoring.bicep' = {
   name: 'monitoring'
   params: {
@@ -256,6 +258,7 @@ module monitoring 'modules/monitoring.bicep' = {
 // =====================================================================================
 // 3. Host Pool + Desktop App Group + Scaling Plan + RBAC
 // =====================================================================================
+@description('Module: AVD host pool (publicNetworkAccess=Disabled) + desktop app group + scaling plan + Desktop Virtualization User RBAC assignment.')
 module hostPool 'modules/host-pool.bicep' = {
   name: 'hostPool'
   params: {
@@ -277,6 +280,7 @@ module hostPool 'modules/host-pool.bicep' = {
 // =====================================================================================
 // 4. Workspace — attaches the desktop app group
 // =====================================================================================
+@description('Module: AVD workspace (publicNetworkAccess=Disabled) referencing the desktop app group.')
 module workspace 'modules/workspace.bicep' = {
   name: 'workspace'
   params: {
@@ -290,6 +294,7 @@ module workspace 'modules/workspace.bicep' = {
 // =====================================================================================
 // 5. Private Link — 2 DNS zones + 3 PEs (after host pool + workspace exist)
 // =====================================================================================
+@description('Module: 2 private DNS zones (privatelink.wvd + privatelink-global.wvd) + 3 private endpoints (connection on host pool, feed + global on workspace).')
 module privateLink 'modules/private-link.bicep' = {
   name: 'privateLink'
   params: {
@@ -308,6 +313,7 @@ module privateLink 'modules/private-link.bicep' = {
 // =====================================================================================
 // 6. FSLogix (optional) — storage + Entra Kerberos + private endpoint
 // =====================================================================================
+@description('Module (optional, gated by enableFSLogix): Azure Files share + Entra Kerberos auth + private endpoint for FSLogix profile containers.')
 module fslogix 'modules/fslogix.bicep' = if (enableFSLogix) {
   name: 'fslogix'
   params: {
@@ -325,6 +331,7 @@ module fslogix 'modules/fslogix.bicep' = if (enableFSLogix) {
 // =====================================================================================
 // 7. Session hosts — N VMs, NICs, extensions, registers to host pool
 // =====================================================================================
+@description('Module: N Entra-joined session-host VMs + NICs + 4 extensions (AADLoginForWindows, Shortpath registry DSC, AVD-DSC agent install, AzureMonitorWindowsAgent).')
 module sessionHosts 'modules/session-hosts.bicep' = {
   name: 'sessionHosts'
   params: {
