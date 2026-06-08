@@ -128,3 +128,17 @@ High level:
 ## License
 
 [MIT](LICENSE) © 2026 Michael Harmon
+
+
+## Contributing
+
+This repository's `main` branch is protected. Direct pushes are blocked for all users (including admins). Workflow:
+
+```bash
+git checkout -b feat/your-change
+# ...edits...
+git push origin feat/your-change
+gh pr create --fill
+# wait for CI (6 required checks must pass)
+gh pr merge --squash
+```
